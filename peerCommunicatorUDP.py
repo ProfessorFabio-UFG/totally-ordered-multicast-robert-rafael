@@ -13,6 +13,9 @@ handShakeCount = 0
 
 PEERS = []
 
+# Lamport Logical Clock
+lamport_clock = 0
+
 # UDP sockets to send and receive data messages:
 # Create send socket
 sendSocket = socket(AF_INET, SOCK_DGRAM)
@@ -64,56 +67,62 @@ class MsgHandler(threading.Thread):
 
   def run(self):
     print('Handler is ready. Waiting for the handshakes...')
-    
-    #global handShakes
+
     global handShakeCount
-    
+    global lamport_clock, message_buffer, message_acks
+
     logList = []
-    
-    # Wait until handshakes are received from all other processes
-    # (to make sure that all processes are synchronized before they start exchanging messages)
+
     while handShakeCount < N:
       msgPack = self.sock.recv(1024)
       msg = pickle.loads(msgPack)
-      #print ('########## unpickled msgPack: ', msg)
       if msg[0] == 'READY':
-
-        # To do: send reply of handshake and wait for confirmation
-
-        handShakeCount = handShakeCount + 1
-        #handShakes[msg[1]] = 1
+        handShakeCount += 1
         print('--- Handshake received: ', msg[1])
 
     print('Secondary Thread: Received all handshakes. Entering the loop to receive messages.')
 
-    stopCount=0 
-    while True:                
-      msgPack = self.sock.recv(1024)   # receive data from client
+    stopCount = 0
+    while True:
+      msgPack = self.sock.recv(1024)
       msg = pickle.loads(msgPack)
-      if msg[0] == -1:   # count the 'stop' messages from the other processes
-        stopCount = stopCount + 1
+      if isinstance(msg, dict):
+        sender_id = msg['sender_id']
+        timestamp = msg['timestamp']
+        content = msg['content']
+
+        lamport_clock = max(lamport_clock, timestamp) + 1
+        print(f"[Lamport Clock={lamport_clock}] Received from {sender_id}: {content}")
+
+        key = (timestamp, sender_id)
+        if key not in message_acks:
+          message_acks[key] = set()
+          message_buffer.append((timestamp, sender_id, content))
+
+        message_acks[key].add(sender_id)
+
+        for k in sorted(message_buffer):
+          if len(message_acks[k[:2]]) == N:
+            logList.append(k)
+            print(f"Delivered message from {k[1]}: {k[2]}")
+            message_buffer.remove(k)
+      elif msg[0] == -1:
+        stopCount += 1
         if stopCount == N:
-          break  # stop loop when all other processes have finished
-      else:
-        print('Message ' + str(msg[1]) + ' from process ' + str(msg[0]))
-        logList.append(msg)
-        
-    # Write log file
+          break
+
     logFile = open('logfile'+str(myself)+'.log', 'w')
     logFile.writelines(str(logList))
     logFile.close()
-    
-    # Send the list of messages to the server (using a TCP socket) for comparison
+
     print('Sending the list of messages to the server for comparison...')
     clientSock = socket(AF_INET, SOCK_STREAM)
     clientSock.connect((SERVER_ADDR, SERVER_PORT))
     msgPack = pickle.dumps(logList)
     clientSock.send(msgPack)
     clientSock.close()
-    
-    # Reset the handshake counter
-    handShakeCount = 0
 
+    handShakeCount = 0
     exit(0)
 
 # Function to wait for start signal from comparison server:
@@ -169,11 +178,17 @@ while 1:
   for msgNumber in range(0, nMsgs):
     # Wait some random time between successive messages
     time.sleep(random.randrange(10,100)/1000)
-    msg = (myself, msgNumber)
+    lamport_clock += 1
+    msg = {
+      'sender_id': myself,
+      'timestamp': lamport_clock,
+      'content': f'Message {msgNumber}'
+    }
+    msgPack = pickle.dumps(msg)
     msgPack = pickle.dumps(msg)
     for addrToSend in PEERS:
       sendSocket.sendto(msgPack, (addrToSend,PEER_UDP_PORT))
-      print('Sent message ' + str(msgNumber))
+      print(f'[Lamport Clock={lamport_clock}] Sent message {msgNumber}')
 
   # Tell all processes that I have no more messages to send
   for addrToSend in PEERS:
