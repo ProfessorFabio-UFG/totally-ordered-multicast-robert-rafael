@@ -64,6 +64,51 @@ def getListOfPeers():
   clientSock.close()
   return PEERS
 
+def aguardar_entrega_pendente(logList, message_buffer, message_acks, recvSocket, timeout=5):
+    print("Todos os peers enviaram -1. Aguardando últimos ACKs...")
+
+    import time
+    start_time = time.time()
+
+    while time.time() - start_time < timeout:
+        try:
+            recvSocket.settimeout(0.5)
+            msgPack = recvSocket.recv(1024)
+            msg = pickle.loads(msgPack)
+
+            if isinstance(msg, dict) and msg.get("type") == "ack":
+                ack_key = (msg['timestamp'], msg['sender_id'])
+                if ack_key not in message_acks:
+                    message_acks[ack_key] = set()
+                message_acks[ack_key].add(msg['ack_from'])
+                print(f"✅ ACK recebido: {ack_key} de {msg['ack_from']}")
+                print(f"↪  Total de ACKs para {ack_key}: {len(message_acks[ack_key])}/{N}")
+
+        except timeout:
+            pass
+
+        message_buffer.sort()
+        i = 0
+        while i < len(message_buffer):
+            timestamp, sender_id, content = message_buffer[i]
+            key = (timestamp, sender_id)
+            if len(message_acks.get(key, set())) == N:
+                logList.append((timestamp, sender_id, content))
+                print(f"✔️  Entregue após -1: ({sender_id}, {content})")
+                message_buffer.pop(i)
+            else:
+                i += 1
+
+        if len(message_buffer) == 0:
+            break
+
+        print("🕓 Aguardando entrega de mensagens restantes...")
+        print(f"Mensagens restantes no buffer: {len(message_buffer)}")
+        for m in message_buffer:
+            print(f"  ➤ ({m[0]}, {m[1]}) com {len(message_acks.get((m[0], m[1]), set()))}/{N} ACKs")
+
+    recvSocket.settimeout(None)
+
 class MsgHandler(threading.Thread):
   def __init__(self, sock):
     threading.Thread.__init__(self)
@@ -243,47 +288,3 @@ while 1:
     msgPack = pickle.dumps(msg)
     sendSocket.sendto(msgPack, (addrToSend,PEER_UDP_PORT))
 
-def aguardar_entrega_pendente(logList, message_buffer, message_acks, recvSocket, timeout=5):
-    print("Todos os peers enviaram -1. Aguardando últimos ACKs...")
-
-    import time
-    start_time = time.time()
-
-    while time.time() - start_time < timeout:
-        try:
-            recvSocket.settimeout(0.5)
-            msgPack = recvSocket.recv(1024)
-            msg = pickle.loads(msgPack)
-
-            if isinstance(msg, dict) and msg.get("type") == "ack":
-                ack_key = (msg['timestamp'], msg['sender_id'])
-                if ack_key not in message_acks:
-                    message_acks[ack_key] = set()
-                message_acks[ack_key].add(msg['ack_from'])
-                print(f"✅ ACK recebido: {ack_key} de {msg['ack_from']}")
-                print(f"↪  Total de ACKs para {ack_key}: {len(message_acks[ack_key])}/{N}")
-
-        except timeout:
-            pass
-
-        message_buffer.sort()
-        i = 0
-        while i < len(message_buffer):
-            timestamp, sender_id, content = message_buffer[i]
-            key = (timestamp, sender_id)
-            if len(message_acks.get(key, set())) == N:
-                logList.append((timestamp, sender_id, content))
-                print(f"✔️  Entregue após -1: ({sender_id}, {content})")
-                message_buffer.pop(i)
-            else:
-                i += 1
-
-        if len(message_buffer) == 0:
-            break
-
-        print("🕓 Aguardando entrega de mensagens restantes...")
-        print(f"Mensagens restantes no buffer: {len(message_buffer)}")
-        for m in message_buffer:
-            print(f"  ➤ ({m[0]}, {m[1]}) com {len(message_acks.get((m[0], m[1]), set()))}/{N} ACKs")
-
-    recvSocket.settimeout(None)
