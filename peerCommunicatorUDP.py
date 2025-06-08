@@ -104,7 +104,7 @@ class MsgHandler(threading.Thread):
           message_acks[key] = set()
           message_buffer.append((timestamp, sender_id, content))
 
-        message_acks[key].add(sender_id)
+        message_acks[key].add(myself)
 
         message_buffer.sort()
 
