@@ -127,9 +127,22 @@ class MsgHandler(threading.Thread):
         elif msg[0] == -1:
             stopCount += 1
             if stopCount == N:
-                print("Todos os peers enviaram -1. Aguardando últimos ACKs...")
-                time.sleep(1)
-                break
+              for _ in range(5):  # tenta algumas vezes dar tempo aos ACKs
+                  print("🕓 Aguardando entrega de mensagens restantes...")
+                  message_buffer.sort(key=lambda x: (x[0], x[1]))
+                  i = 0
+                  while i < len(message_buffer):
+                      (timestamp, sender_id, content) = message_buffer[i]
+                      key = (timestamp, sender_id)
+                      if len(message_acks.get(key, set())) == N:
+                          logList.append((timestamp, sender_id, content))
+                          print(f"Delivered message from {sender_id}: {content}")
+                          message_buffer.pop(i)
+                      else:
+                          i += 1
+                  print(f"Mensagens restantes no buffer: {len(message_buffer)}")
+                  time.sleep(1)
+              break
 
         # Verifica se alguma mensagem pode ser entregue
         message_buffer.sort(key=lambda x: (x[0], x[1]))
