@@ -107,6 +107,10 @@ class MsgHandler(threading.Thread):
         message_acks[key].add(sender_id)
 
         message_buffer.sort()
+
+        print(f"DEBUG: message_acks[{key}] = {message_acks[key]}")
+        print(f"DEBUG: buffer contains {len(message_buffer)} messages")
+
         while message_buffer:
           first = message_buffer[0]
           delivery_key = (first[0], first[1])
