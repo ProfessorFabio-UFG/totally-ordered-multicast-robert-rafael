@@ -103,10 +103,19 @@ class MsgHandler(threading.Thread):
         if key not in message_acks:
           message_acks[key] = set()
           message_buffer.append((timestamp, sender_id, content))
-          logList.append((timestamp, sender_id, content))  # entrega direta
-          print(f"Delivered message from {sender_id}: {content}")
 
         message_acks[key].add(sender_id)
+
+        message_buffer.sort()
+        while message_buffer:
+          first = message_buffer[0]
+          delivery_key = (first[0], first[1])
+          if len(message_acks.get(delivery_key, set())) == N:
+            logList.append(first)
+            print(f"Delivered message from {first[1]}: {first[2]}")
+            message_buffer.pop(0)
+          else:
+            break
 
       elif msg[0] == -1:
         stopCount += 1
