@@ -77,74 +77,91 @@ class MsgHandler(threading.Thread):
     logList = []
 
     while handShakeCount < N:
-      msgPack = self.sock.recv(1024)
-      msg = pickle.loads(msgPack)
-      if msg[0] == 'READY':
-        handShakeCount += 1
-        print('--- Handshake received: ', msg[1])
+        msgPack = self.sock.recv(1024)
+        msg = pickle.loads(msgPack)
+        if msg[0] == 'READY':
+            handShakeCount += 1
+            print('--- Handshake received: ', msg[1])
 
     print('Secondary Thread: Received all handshakes. Entering the loop to receive messages.')
 
     stopCount = 0
     while True:
-      msgPack = self.sock.recv(1024)
-      msg = pickle.loads(msgPack)
+        msgPack = self.sock.recv(1024)
+        msg = pickle.loads(msgPack)
 
-      if isinstance(msg, dict):
-        if msg.get('type') == 'ack':
-          ack_key = (msg['timestamp'], msg['sender_id'])
-          if ack_key not in message_acks:
-            message_acks[ack_key] = set()
-          message_acks[ack_key].add(msg['ack_from'])
+        if isinstance(msg, dict):
+            if msg.get('type') == 'ack':
+                ack_key = (msg['timestamp'], msg['sender_id'])
+                if ack_key not in message_acks:
+                    message_acks[ack_key] = set()
+                message_acks[ack_key].add(msg['ack_from'])
 
-        else:
-          sender_id = msg['sender_id']
-          timestamp = msg['timestamp']
-          content = msg['content']
+                print(f"✅ ACK recebido: ({msg['timestamp']}, {msg['sender_id']}) de {msg['ack_from']}")
+                print(f"↪️  Total de ACKs para ({msg['timestamp']}, {msg['sender_id']}): {len(message_acks[ack_key])}/{N}")
 
-          lamport_clock = max(lamport_clock, timestamp) + 1
-          print(f"[Lamport Clock={lamport_clock}] Received from {sender_id}: {content}")
+            else:
+                sender_id = msg['sender_id']
+                timestamp = msg['timestamp']
+                content = msg['content']
+                lamport_clock = max(lamport_clock, timestamp) + 1
+                print(f"[Lamport Clock={lamport_clock}] Received from {sender_id}: {content}")
 
-          key = (timestamp, sender_id)
-          if key not in message_acks:
-            message_acks[key] = set()
-            message_buffer.append((timestamp, sender_id, content))
+                key = (timestamp, sender_id)
+                if key not in message_acks:
+                    message_acks[key] = set()
+                    message_buffer.append((timestamp, sender_id, content))
 
-          # Envia ACK para todos os peers
-          ack_msg = {
-            'type': 'ack',
-            'timestamp': timestamp,
-            'sender_id': sender_id,
-            'ack_from': myself
-          }
-          ackPack = pickle.dumps(ack_msg)
-          for addrToSend in PEERS:
-            sendSocket.sendto(ackPack, (addrToSend, PEER_UDP_PORT))
+                # Enviar ACK para todos os peers, incluindo a si mesmo
+                ack_msg = {
+                    'type': 'ack',
+                    'timestamp': timestamp,
+                    'sender_id': sender_id,
+                    'ack_from': myself
+                }
+                ackPack = pickle.dumps(ack_msg)
+                for addrToSend in PEERS:
+                    sendSocket.sendto(ackPack, (addrToSend, PEER_UDP_PORT))
+                sendSocket.sendto(ackPack, ('127.0.0.1', PEER_UDP_PORT))  # ACK para si
 
-      elif msg[0] == -1:
-        stopCount += 1
-        if stopCount == N:
-          break
+        elif msg[0] == -1:
+            stopCount += 1
+            if stopCount == N:
+                print("Todos os peers enviaram -1. Aguardando últimos ACKs...")
+                time.sleep(1)
+                break
 
-    # Tentativa de entrega ordenada
-      message_buffer.sort(key=lambda x: (x[0], x[1]))  # (timestamp, sender_id)
-      while message_buffer:
-        first = message_buffer[0]
-        key = (first[0], first[1])
+        # Verifica se alguma mensagem pode ser entregue
+        message_buffer.sort(key=lambda x: (x[0], x[1]))
+        i = 0
+        while i < len(message_buffer):
+            (timestamp, sender_id, content) = message_buffer[i]
+            key = (timestamp, sender_id)
+            if len(message_acks.get(key, set())) == N:
+                logList.append((timestamp, sender_id, content))
+                print(f"Delivered message from {sender_id}: {content}")
+                message_buffer.pop(i)
+            else:
+                i += 1
+
+    # Última tentativa de entrega após o fim do loop
+    message_buffer.sort(key=lambda x: (x[0], x[1]))
+    for (timestamp, sender_id, content) in message_buffer:
+        key = (timestamp, sender_id)
         if len(message_acks.get(key, set())) == N:
-            logList.append(first)
-            print(f"Delivered message from {first[1]}: {first[2]}")
-            message_buffer.pop(0)
-        else:
-            break
+            logList.append((timestamp, sender_id, content))
+            print(f"Delivered (final) from {sender_id}: {content}")
 
     expected = N * nMsgs
     if len(logList) < expected:
-      print(f"⚠️  Atenção: log incompleto — esperado {expected}, recebido {len(logList)}")
+        print(f"⚠️  Atenção: log incompleto — esperado {expected}, recebido {len(logList)}")
+        print(f"Mensagens restantes no buffer: {len(message_buffer)}")
+        for m in message_buffer:
+            key = (m[0], m[1])
+            print(f"  ➤ {key} com {len(message_acks.get(key, set()))}/{N} ACKs")
 
-    # Ainda assim salva o que tiver (útil para depuração)
     with open('logfile' + str(myself) + '.log', 'w') as logFile:
-      logFile.writelines(str(logList))
+        logFile.writelines(str(logList))
 
     print('Sending the list of messages to the server for comparison...')
     clientSock = socket(AF_INET, SOCK_STREAM)
