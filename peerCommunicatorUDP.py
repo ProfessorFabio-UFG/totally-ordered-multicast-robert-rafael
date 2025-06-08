@@ -14,6 +14,9 @@ handShakeCount = 0
 PEERS = []
 
 # Lamport Logical Clock
+handShakeCount = 0
+message_acks = {}
+message_buffer = []
 lamport_clock = 0
 
 # UDP sockets to send and receive data messages:
@@ -68,8 +71,7 @@ class MsgHandler(threading.Thread):
   def run(self):
     print('Handler is ready. Waiting for the handshakes...')
 
-    global handShakeCount
-    global lamport_clock, message_buffer, message_acks
+    global handShakeCount, lamport_clock, message_buffer, message_acks, myself
 
     logList = []
 
