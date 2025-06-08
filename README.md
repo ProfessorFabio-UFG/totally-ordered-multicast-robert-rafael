@@ -7,3 +7,10 @@ The peer processes run the PeerCommunicatorUDP.py program, which has two separat
 
 
 In order to actually see the problem, it is necessary to run the peer processes on different networks (e.g., run some of the processes in one region of the cloud, whereas the others are run on another region).
+
+
+### Lampart Clock
+
+O algoritmo implementado utiliza relógios lógicos de Lamport para garantir a ordenação total das mensagens trocadas entre processos em um sistema distribuído. Cada processo mantém um contador lógico, que é incrementado a cada envio de mensagem. Ao receber uma mensagem, o processo ajusta seu relógio lógico com base no valor recebido, garantindo que todos os eventos sigam uma ordem causal.
+As mensagens são enviadas contendo o valor do relógio no momento do envio, permitindo que os receptores ordenem corretamente os eventos recebidos. Com isso, todos os processos mantêm um histórico de mensagens em uma ordem consistente, mesmo em ambientes com diferentes atrasos de rede.
+
