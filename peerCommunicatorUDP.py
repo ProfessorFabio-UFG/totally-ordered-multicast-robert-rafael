@@ -127,16 +127,16 @@ class MsgHandler(threading.Thread):
           break
 
     # Tentativa de entrega ordenada
-      message_buffer.sort()
+      message_buffer.sort(key=lambda x: (x[0], x[1]))  # (timestamp, sender_id)
       while message_buffer:
         first = message_buffer[0]
         key = (first[0], first[1])
         if len(message_acks.get(key, set())) == N:
-          logList.append(first)
-          print(f"Delivered message from {first[1]}: {first[2]}")
-          message_buffer.pop(0)
+            logList.append(first)
+            print(f"Delivered message from {first[1]}: {first[2]}")
+            message_buffer.pop(0)
         else:
-          break
+            break
 
     expected = N * nMsgs
     if len(logList) < expected:

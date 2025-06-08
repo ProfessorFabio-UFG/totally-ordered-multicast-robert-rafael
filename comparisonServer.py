@@ -72,9 +72,9 @@ def waitForLogsAndCompare(N_MSGS):
     unordered = 0
 
     # Comparação segura das listas
-    for j in range(0, N_MSGS - 1):
+    for j in range(0, N_MSGS):
         firstMsg = msgs[0][j]
-        for i in range(1, N - 1):
+        for i in range(1, N):
             if firstMsg != msgs[i][j]:
                 unordered += 1
                 break
