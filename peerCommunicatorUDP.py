@@ -91,46 +91,56 @@ class MsgHandler(threading.Thread):
       msg = pickle.loads(msgPack)
 
       if isinstance(msg, dict):
-        sender_id = msg['sender_id']
-        timestamp = msg['timestamp']
-        content = msg['content']
+        if msg.get('type') == 'ack':
+          ack_key = (msg['timestamp'], msg['sender_id'])
+          if ack_key not in message_acks:
+            message_acks[ack_key] = set()
+          message_acks[ack_key].add(msg['ack_from'])
 
-        lamport_clock = max(lamport_clock, timestamp) + 1
-        print(f"[Lamport Clock={lamport_clock}] Received from {sender_id}: {content}")
+        else:
+          sender_id = msg['sender_id']
+          timestamp = msg['timestamp']
+          content = msg['content']
 
-        key = (timestamp, sender_id)
+          lamport_clock = max(lamport_clock, timestamp) + 1
+          print(f"[Lamport Clock={lamport_clock}] Received from {sender_id}: {content}")
 
-        if key not in message_acks:
-          message_acks[key] = set()
-          message_buffer.append((timestamp, sender_id, content))
+          key = (timestamp, sender_id)
+          if key not in message_acks:
+            message_acks[key] = set()
+            message_buffer.append((timestamp, sender_id, content))
 
-        message_acks[key].add(myself)
-
-        message_buffer.sort()
-
-        print(f"DEBUG: message_acks[{key}] = {message_acks[key]}")
-        print(f"DEBUG: buffer contains {len(message_buffer)} messages")
-
-        while message_buffer:
-          first = message_buffer[0]
-          delivery_key = (first[0], first[1])
-          if myself in message_acks.get(delivery_key, set()):
-            logList.append(first)
-            print(f"Delivered message from {first[1]}: {first[2]}")
-            message_buffer.pop(0)
-          else:
-            break
+          # Envia ACK para todos os peers
+          ack_msg = {
+            'type': 'ack',
+            'timestamp': timestamp,
+            'sender_id': sender_id,
+            'ack_from': myself
+          }
+          ackPack = pickle.dumps(ack_msg)
+          for addrToSend in PEERS:
+            sendSocket.sendto(ackPack, (addrToSend, PEER_UDP_PORT))
 
       elif msg[0] == -1:
         stopCount += 1
         if stopCount == N:
           break
 
+    # Tentativa de entrega ordenada
+      message_buffer.sort()
+      while message_buffer:
+        first = message_buffer[0]
+        key = (first[0], first[1])
+        if len(message_acks.get(key, set())) == N:
+          logList.append(first)
+          print(f"Delivered message from {first[1]}: {first[2]}")
+          message_buffer.pop(0)
+        else:
+          break
 
-    expected_msg_count = N * nMsgs  # N peers × n mensagens cada
-
-    if len(logList) < expected_msg_count:
-      print(f"⚠️  Atenção: log incompleto — esperado {expected_msg_count}, recebido {len(logList)}")
+    expected = N * nMsgs
+    if len(logList) < expected:
+      print(f"⚠️  Atenção: log incompleto — esperado {expected}, recebido {len(logList)}")
 
     # Ainda assim salva o que tiver (útil para depuração)
     with open('logfile' + str(myself) + '.log', 'w') as logFile:
