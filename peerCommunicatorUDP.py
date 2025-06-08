@@ -89,6 +89,7 @@ class MsgHandler(threading.Thread):
     while True:
       msgPack = self.sock.recv(1024)
       msg = pickle.loads(msgPack)
+
       if isinstance(msg, dict):
         sender_id = msg['sender_id']
         timestamp = msg['timestamp']
@@ -98,21 +99,20 @@ class MsgHandler(threading.Thread):
         print(f"[Lamport Clock={lamport_clock}] Received from {sender_id}: {content}")
 
         key = (timestamp, sender_id)
+
         if key not in message_acks:
           message_acks[key] = set()
           message_buffer.append((timestamp, sender_id, content))
+          logList.append((timestamp, sender_id, content))  # entrega direta
+          print(f"Delivered message from {sender_id}: {content}")
 
         message_acks[key].add(sender_id)
 
-        for k in sorted(message_buffer):
-          if len(message_acks[k[:2]]) == N:
-            logList.append(k)
-            print(f"Delivered message from {k[1]}: {k[2]}")
-            message_buffer.remove(k)
       elif msg[0] == -1:
         stopCount += 1
         if stopCount == N:
           break
+
 
     expected_msg_count = N * nMsgs  # N peers × n mensagens cada
 
