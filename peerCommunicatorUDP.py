@@ -18,6 +18,7 @@ handShakeCount = 0
 message_acks = {}
 message_buffer = []
 lamport_clock = 0
+nMsgs = 0
 
 # UDP sockets to send and receive data messages:
 # Create send socket
@@ -71,7 +72,7 @@ class MsgHandler(threading.Thread):
   def run(self):
     print('Handler is ready. Waiting for the handshakes...')
 
-    global handShakeCount, lamport_clock, message_buffer, message_acks, myself
+    global handShakeCount, lamport_clock, message_buffer, message_acks, myself, nMsgs
 
     logList = []
 
@@ -113,9 +114,14 @@ class MsgHandler(threading.Thread):
         if stopCount == N:
           break
 
-    logFile = open('logfile'+str(myself)+'.log', 'w')
-    logFile.writelines(str(logList))
-    logFile.close()
+    expected_msg_count = N * nMsgs  # N peers × n mensagens cada
+
+    if len(logList) < expected_msg_count:
+      print(f"⚠️  Atenção: log incompleto — esperado {expected_msg_count}, recebido {len(logList)}")
+
+    # Ainda assim salva o que tiver (útil para depuração)
+    with open('logfile' + str(myself) + '.log', 'w') as logFile:
+      logFile.writelines(str(logList))
 
     print('Sending the list of messages to the server for comparison...')
     clientSock = socket(AF_INET, SOCK_STREAM)

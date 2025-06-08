@@ -47,30 +47,41 @@ def startPeers(peerList,nMsgs):
 		peerNumber = peerNumber + 1
 
 def waitForLogsAndCompare(N_MSGS):
-	# Loop to wait for the message logs for comparison:
-	numPeers = 0
-	msgs = [] # each msg is a list of tuples (with the original messages received by the peer processes)
+    # Loop to wait for the message logs for comparison:
+    numPeers = 0
+    msgs = []  # each msg is a list of tuples (with the original messages received by the peer processes)
 
-	# Receive the logs of messages from the peer processes
-	while numPeers < N:
-		(conn, addr) = serverSock.accept()
-		msgPack = conn.recv(32768)
-		print ('Received log from peer')
-		conn.close()
-		msgs.append(pickle.loads(msgPack))
-		numPeers = numPeers + 1
+    # Receive the logs of messages from the peer processes
+    while numPeers < N:
+        (conn, addr) = serverSock.accept()
+        msgPack = conn.recv(32768)
+        print('Received log from peer')
+        conn.close()
+        msgs.append(pickle.loads(msgPack))
+        numPeers += 1
 
-	unordered = 0
+    # Validação: garantir que todos os logs tenham o mesmo número de mensagens
+    minLength = min(len(m) for m in msgs)
+    if minLength < N_MSGS:
+        print(f"⚠️  Pelo menos um dos logs recebidos tem menos de {N_MSGS} mensagens.")
+        for idx, m in enumerate(msgs):
+            print(f"  -> Peer {idx} recebeu {len(m)} mensagens")
+        print("❌ Abortando comparação por segurança.")
+        return
 
-	# Compare the lists of messages
-	for j in range(0,N_MSGS-1):
-		firstMsg = msgs[0][j]
-		for i in range(1,N-1):
-			if firstMsg != msgs[i][j]:
-				unordered = unordered + 1
-				break
-	
-	print ('Found ' + str(unordered) + ' unordered message rounds')
+    unordered = 0
+
+    # Comparação segura das listas
+    for j in range(0, N_MSGS - 1):
+        firstMsg = msgs[0][j]
+        for i in range(1, N - 1):
+            if firstMsg != msgs[i][j]:
+                unordered += 1
+                break
+
+    print('✅ Comparação concluída.')
+    print('❗ Found ' + str(unordered) + ' unordered message rounds')
+
 
 
 # Initiate server:
