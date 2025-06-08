@@ -15,7 +15,7 @@ PEERS = []
 
 # Lamport Logical Clock
 handShakeCount = 0
-message_acks = {}
+message_acks = []
 message_buffer = []
 lamport_clock = 0
 
