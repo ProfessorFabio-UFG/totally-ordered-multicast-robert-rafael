@@ -110,7 +110,7 @@ class MsgHandler(threading.Thread):
         while message_buffer:
           first = message_buffer[0]
           delivery_key = (first[0], first[1])
-          if len(message_acks.get(delivery_key, set())) == N:
+          if myself in message_acks.get(delivery_key, set()):
             logList.append(first)
             print(f"Delivered message from {first[1]}: {first[2]}")
             message_buffer.pop(0)
