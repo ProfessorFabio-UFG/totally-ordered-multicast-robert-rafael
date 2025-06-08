@@ -124,37 +124,40 @@ class MsgHandler(threading.Thread):
       elif msg[0] == -1:
         stopCount += 1
         if stopCount == N:
-          break
+            print("Todos os peers enviaram -1. Aguardando últimos ACKs...")
+            time.sleep(1)  # dá tempo para os ACKs finais chegarem
+            continue
 
-    # Tentativa de entrega ordenada
-      message_buffer.sort(key=lambda x: (x[0], x[1]))  # (timestamp, sender_id)
+      # Tentativa de entrega ordenada
+      # Última tentativa de entrega após fim do loop
+      message_buffer.sort(key=lambda x: (x[0], x[1]))
       while message_buffer:
-        first = message_buffer[0]
-        key = (first[0], first[1])
-        if len(message_acks.get(key, set())) == N:
-            logList.append(first)
-            print(f"Delivered message from {first[1]}: {first[2]}")
-            message_buffer.pop(0)
-        else:
-            break
+          first = message_buffer[0]
+          key = (first[0], first[1])
+          if len(message_acks.get(key, set())) == N:
+              logList.append(first)
+              print(f"Delivered message from {first[1]}: {first[2]}")
+              message_buffer.pop(0)
+          else:
+              break
 
-    expected = N * nMsgs
-    if len(logList) < expected:
-      print(f"⚠️  Atenção: log incompleto — esperado {expected}, recebido {len(logList)}")
+      expected = N * nMsgs
+      if len(logList) < expected:
+        print(f"⚠️  Atenção: log incompleto — esperado {expected}, recebido {len(logList)}")
 
-    # Ainda assim salva o que tiver (útil para depuração)
-    with open('logfile' + str(myself) + '.log', 'w') as logFile:
-      logFile.writelines(str(logList))
+      # Ainda assim salva o que tiver (útil para depuração)
+      with open('logfile' + str(myself) + '.log', 'w') as logFile:
+        logFile.writelines(str(logList))
 
-    print('Sending the list of messages to the server for comparison...')
-    clientSock = socket(AF_INET, SOCK_STREAM)
-    clientSock.connect((SERVER_ADDR, SERVER_PORT))
-    msgPack = pickle.dumps(logList)
-    clientSock.send(msgPack)
-    clientSock.close()
+      print('Sending the list of messages to the server for comparison...')
+      clientSock = socket(AF_INET, SOCK_STREAM)
+      clientSock.connect((SERVER_ADDR, SERVER_PORT))
+      msgPack = pickle.dumps(logList)
+      clientSock.send(msgPack)
+      clientSock.close()
 
-    handShakeCount = 0
-    exit(0)
+      handShakeCount = 0
+      exit(0)
 
 # Function to wait for start signal from comparison server:
 def waitToStart():
