@@ -80,7 +80,8 @@ def aguardar_entrega_pendente(logList, message_buffer, message_acks, recvSocket,
                 ack_key = (msg['timestamp'], msg['sender_id'])
                 if ack_key not in message_acks:
                     message_acks[ack_key] = set()
-                message_acks[ack_key].add(msg['ack_from'])
+                if msg['ack_from'] not in message_acks[ack_key]:
+                    message_acks[ack_key].add(msg['ack_from'])
                 print(f"✅ ACK recebido: {ack_key} de {msg['ack_from']}")
                 print(f"↪  Total de ACKs para {ack_key}: {len(message_acks[ack_key])}/{N}")
 
@@ -122,6 +123,7 @@ class MsgHandler(threading.Thread):
     logList = []
 
     while handShakeCount < N:
+        time.sleep(0.1)
         msgPack = self.sock.recv(1024)
         msg = pickle.loads(msgPack)
         if msg[0] == 'READY':
@@ -140,10 +142,13 @@ class MsgHandler(threading.Thread):
                 ack_key = (msg['timestamp'], msg['sender_id'])
                 if ack_key not in message_acks:
                     message_acks[ack_key] = set()
-                message_acks[ack_key].add(msg['ack_from'])
 
-                print(f"✅ ACK recebido: ({msg['timestamp']}, {msg['sender_id']}) de {msg['ack_from']}")
-                print(f"↪️  Total de ACKs para ({msg['timestamp']}, {msg['sender_id']}): {len(message_acks[ack_key])}/{N}")
+                if msg['ack_from'] not in message_acks[ack_key]:
+                    message_acks[ack_key].add(msg['ack_from'])
+                    print(f"✅ ACK recebido: {ack_key} de {msg['ack_from']}")
+                    print(f"↪  Total de ACKs para {ack_key}: {len(message_acks[ack_key])}/{N}")
+                else:
+                    print(f"⚠️  ACK duplicado ignorado: {ack_key} de {msg['ack_from']}")
 
             else:
                 sender_id = msg['sender_id']
@@ -167,7 +172,6 @@ class MsgHandler(threading.Thread):
                 ackPack = pickle.dumps(ack_msg)
                 for addrToSend in PEERS:
                     sendSocket.sendto(ackPack, (addrToSend, PEER_UDP_PORT))
-                sendSocket.sendto(ackPack, ('127.0.0.1', PEER_UDP_PORT))  # ACK para si
 
         elif msg[0] == -1:
             stopCount += 1
@@ -276,7 +280,6 @@ while 1:
       'timestamp': lamport_clock,
       'content': f'Message {msgNumber}'
     }
-    msgPack = pickle.dumps(msg)
     msgPack = pickle.dumps(msg)
     for addrToSend in PEERS:
       sendSocket.sendto(msgPack, (addrToSend,PEER_UDP_PORT))
