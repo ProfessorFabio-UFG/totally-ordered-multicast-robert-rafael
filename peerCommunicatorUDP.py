@@ -82,8 +82,8 @@ def aguardar_entrega_pendente(logList, message_buffer, message_acks, recvSocket,
                     message_acks[ack_key] = set()
                 if msg['ack_from'] not in message_acks[ack_key]:
                     message_acks[ack_key].add(msg['ack_from'])
-                print(f"✅ ACK recebido: {ack_key} de {msg['ack_from']}")
-                print(f"↪  Total de ACKs para {ack_key}: {len(message_acks[ack_key])}/{N}")
+                ##print(f"✅ ACK recebido: {ack_key} de {msg['ack_from']}")
+                ##print(f"↪  Total de ACKs para {ack_key}: {len(message_acks[ack_key])}/{N}")
 
         except timeout:
             pass
@@ -145,8 +145,8 @@ class MsgHandler(threading.Thread):
 
                 if msg['ack_from'] not in message_acks[ack_key]:
                     message_acks[ack_key].add(msg['ack_from'])
-                    print(f"✅ ACK recebido: {ack_key} de {msg['ack_from']}")
-                    print(f"↪  Total de ACKs para {ack_key}: {len(message_acks[ack_key])}/{N}")
+                    ##print(f"✅ ACK recebido: {ack_key} de {msg['ack_from']}")
+                    ##print(f"↪  Total de ACKs para {ack_key}: {len(message_acks[ack_key])}/{N}")
                 else:
                     print(f"⚠️  ACK duplicado ignorado: {ack_key} de {msg['ack_from']}")
 
