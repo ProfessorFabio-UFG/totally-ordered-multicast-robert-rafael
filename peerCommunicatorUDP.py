@@ -1,5 +1,6 @@
-from socket  import *
-from constMP import * #-
+
+from socket import *
+from constMP import * #- 
 import threading
 import random
 import time
@@ -32,6 +33,39 @@ serverSock = socket(AF_INET, SOCK_STREAM)
 serverSock.bind(('0.0.0.0', PEER_TCP_PORT))
 serverSock.listen(1)
 
+# Creating a script map for the messages
+script_map = {
+    0: [
+        "Solicitação de status do sistema.",
+        "Requisição de tempo de resposta média.",
+        "Finalizando verificação."
+    ],
+    1: [
+        "Processo 1: Recebido status, iniciando coleta de métricas.",
+        "Processo 1: Tempo médio de resposta: 120ms.",
+        "Processo 1: Encerrando tarefas de monitoramento."
+    ],
+    2: [
+        "Processo 2: Confirmando recebimento de status.",
+        "Processo 2: Alerta! Tempo acima do esperado.",
+        "Processo 2: Log enviado ao servidor."
+    ],
+    3: [
+        "Processo 3: Coleta paralela em andamento.",
+        "Processo 3: Sincronização com o banco concluída.",
+        "Processo 3: Fechando sessão de análise."
+    ],
+    4: [
+        "Processo 4: Iniciando backup dos dados.",
+        "Processo 4: Backup finalizado com sucesso.",
+        "Processo 4: Estado persistido com sucesso."
+    ],
+    5: [
+        "Processo 5: Verificando integridade do sistema.",
+        "Processo 5: Nenhuma inconsistência detectada.",
+        "Processo 5: Aguardando novas instruções."
+    ]
+}
 
 def get_public_ip():
   ipAddr = get('https://api.ipify.org').content.decode('utf8')
@@ -82,8 +116,6 @@ def aguardar_entrega_pendente(logList, message_buffer, message_acks, recvSocket,
                     message_acks[ack_key] = set()
                 if msg['ack_from'] not in message_acks[ack_key]:
                     message_acks[ack_key].add(msg['ack_from'])
-                ##print(f"✅ ACK recebido: {ack_key} de {msg['ack_from']}")
-                ##print(f"↪  Total de ACKs para {ack_key}: {len(message_acks[ack_key])}/{N}")
 
         except timeout:
             pass
@@ -104,9 +136,6 @@ def aguardar_entrega_pendente(logList, message_buffer, message_acks, recvSocket,
             break
 
         print("🕓 Aguardando entrega de mensagens restantes...")
-        print(f"Mensagens restantes no buffer: {len(message_buffer)}")
-        for m in message_buffer:
-            print(f"  ➤ ({m[0]}, {m[1]}) com {len(message_acks.get((m[0], m[1]), set()))}/{N} ACKs")
 
     recvSocket.settimeout(None)
 
@@ -145,10 +174,6 @@ class MsgHandler(threading.Thread):
 
                 if msg['ack_from'] not in message_acks[ack_key]:
                     message_acks[ack_key].add(msg['ack_from'])
-                    ##print(f"✅ ACK recebido: {ack_key} de {msg['ack_from']}")
-                    ##print(f"↪  Total de ACKs para {ack_key}: {len(message_acks[ack_key])}/{N}")
-                else:
-                    print(f"⚠️  ACK duplicado ignorado: {ack_key} de {msg['ack_from']}")
 
             else:
                 sender_id = msg['sender_id']
@@ -179,7 +204,6 @@ class MsgHandler(threading.Thread):
               aguardar_entrega_pendente(logList, message_buffer, message_acks, self.sock)
               break
 
-        # Verifica se alguma mensagem pode ser entregue
         message_buffer.sort(key=lambda x: (x[0], x[1]))
         i = 0
         while i < len(message_buffer):
@@ -192,7 +216,6 @@ class MsgHandler(threading.Thread):
             else:
                 i += 1
 
-    # Última tentativa de entrega após o fim do loop
     message_buffer.sort(key=lambda x: (x[0], x[1]))
     for (timestamp, sender_id, content) in message_buffer:
         key = (timestamp, sender_id)
@@ -203,10 +226,6 @@ class MsgHandler(threading.Thread):
     expected = N * nMsgs
     if len(logList) < expected:
         print(f"⚠️  Atenção: log incompleto — esperado {expected}, recebido {len(logList)}")
-        print(f"Mensagens restantes no buffer: {len(message_buffer)}")
-        for m in message_buffer:
-            key = (m[0], m[1])
-            print(f"  ➤ {key} com {len(message_acks.get(key, set()))}/{N} ACKs")
 
     with open('logfile' + str(myself) + '.log', 'w') as logFile:
         logFile.writelines(str(logList))
@@ -221,7 +240,6 @@ class MsgHandler(threading.Thread):
     handShakeCount = 0
     exit(0)
 
-# Function to wait for start signal from comparison server:
 def waitToStart():
   (conn, addr) = serverSock.accept()
   msgPack = conn.recv(1024)
@@ -243,51 +261,41 @@ while 1:
     print('Terminating.')
     exit(0)
 
-  # Wait for other processes to be ready
-  # To Do: fix bug that causes a failure when not all processes are started within this time
-  # (fully started processes start sending data messages, which the others try to interpret as control messages) 
   time.sleep(5)
 
-  # Create receiving message handler
   msgHandler = MsgHandler(recvSocket)
   msgHandler.start()
   print('Handler started')
 
   PEERS = getListOfPeers()
-  
-  # Send handshakes
-  # To do: Must continue sending until it gets a reply from each process
-  #        Send confirmation of reply
+
   for addrToSend in PEERS:
     print('Sending handshake to ', addrToSend)
     msg = ('READY', myself)
     msgPack = pickle.dumps(msg)
     sendSocket.sendto(msgPack, (addrToSend,PEER_UDP_PORT))
-    #data = recvSocket.recvfrom(128) # Handshadke confirmations have not yet been implemented
 
   print('Main Thread: Sent all handshakes. handShakeCount=', str(handShakeCount))
 
   while (handShakeCount < N):
-    pass  # find a better way to wait for the handshakes
+    pass
 
-  # Send a sequence of data messages to all other processes 
   for msgNumber in range(0, nMsgs):
-    # Wait some random time between successive messages
     time.sleep(random.randrange(10,100)/1000)
     lamport_clock += 1
+    content = script_map.get(myself, [])[msgNumber] if msgNumber < len(script_map.get(myself, [])) else f"Mensagem técnica {msgNumber} do Processo {myself}"
+
     msg = {
       'sender_id': myself,
       'timestamp': lamport_clock,
-      'content': f'Message {msgNumber}'
+      'content': content
     }
     msgPack = pickle.dumps(msg)
     for addrToSend in PEERS:
       sendSocket.sendto(msgPack, (addrToSend,PEER_UDP_PORT))
       print(f'[Lamport Clock={lamport_clock}] Sent message {msgNumber}')
 
-  # Tell all processes that I have no more messages to send
   for addrToSend in PEERS:
     msg = (-1,-1)
     msgPack = pickle.dumps(msg)
-    sendSocket.sendto(msgPack, (addrToSend,PEER_UDP_PORT))
-
+    sendSocket.sendto(msgPack, (addrToSend, PEER_UDP_PORT))
